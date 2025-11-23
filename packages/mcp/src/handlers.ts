@@ -381,19 +381,70 @@ export class ToolHandlers {
             });
             console.log(`[BACKGROUND-INDEX] ✅ Indexing completed successfully! Files: ${stats.indexedFiles}, Chunks: ${stats.totalChunks}`);
 
-            // Set codebase to indexed status with complete statistics
-            this.snapshotManager.setCodebaseIndexed(absolutePath, stats);
-            this.indexingStats = { indexedFiles: stats.indexedFiles, totalChunks: stats.totalChunks };
+            // CRITICAL FIX: Add validation and verification
+            try {
+                // Step 1: Validate stats object
+                if (!stats || typeof stats.indexedFiles !== 'number' || typeof stats.totalChunks !== 'number') {
+                    console.error(`[BACKGROUND-INDEX] ❌ Invalid stats object:`, stats);
+                    throw new Error(`Invalid indexing stats: ${JSON.stringify(stats)}`);
+                }
 
-            // Save snapshot after updating codebase lists
-            this.snapshotManager.saveCodebaseSnapshot();
+                // Step 2: Set indexed status
+                console.log(`[BACKGROUND-INDEX] 📊 Setting codebase to indexed status...`);
+                this.snapshotManager.setCodebaseIndexed(absolutePath, stats);
+                this.indexingStats = { indexedFiles: stats.indexedFiles, totalChunks: stats.totalChunks };
 
-            let message = `Background indexing completed for '${absolutePath}' using ${splitterType.toUpperCase()} splitter.\nIndexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks.`;
-            if (stats.status === 'limit_reached') {
-                message += `\n⚠️  Warning: Indexing stopped because the chunk limit (450,000) was reached. The index may be incomplete.`;
+                // Step 3: Save snapshot
+                console.log(`[BACKGROUND-INDEX] 💾 Saving snapshot to disk...`);
+                this.snapshotManager.saveCodebaseSnapshot();
+
+                // Step 4: CRITICAL - Verify save was successful
+                console.log(`[BACKGROUND-INDEX] 🔍 Verifying snapshot was saved...`);
+                const savedStatus = this.snapshotManager.getCodebaseStatus(absolutePath);
+                const savedInfo = this.snapshotManager.getCodebaseInfo(absolutePath);
+
+                console.log(`[BACKGROUND-INDEX] Verified status: ${savedStatus}`);
+                console.log(`[BACKGROUND-INDEX] Verified info:`, JSON.stringify(savedInfo, null, 2));
+
+                if (savedStatus !== 'indexed') {
+                    console.error(`[BACKGROUND-INDEX] ❌ Snapshot verification failed! Expected 'indexed', got '${savedStatus}'`);
+                    console.log(`[BACKGROUND-INDEX] 🔄 Retrying snapshot save...`);
+                    this.snapshotManager.saveCodebaseSnapshot();
+
+                    // Verify retry
+                    const retryStatus = this.snapshotManager.getCodebaseStatus(absolutePath);
+                    if (retryStatus !== 'indexed') {
+                        throw new Error(`Snapshot save failed after retry. Status: ${retryStatus}`);
+                    }
+                    console.log(`[BACKGROUND-INDEX] ✅ Retry successful!`);
+                }
+
+                console.log(`[BACKGROUND-INDEX] ✅ Snapshot saved and verified for: ${absolutePath}`);
+
+                // Step 5: Success message
+                let message = `Background indexing completed for '${absolutePath}' using ${splitterType.toUpperCase()} splitter.\nIndexed ${stats.indexedFiles} files, ${stats.totalChunks} chunks.`;
+                if (stats.status === 'limit_reached') {
+                    message += `\n⚠️  Warning: Indexing stopped because the chunk limit (450,000) was reached. The index may be incomplete.`;
+                }
+
+                console.log(`[BACKGROUND-INDEX] ${message}`);
+
+            } catch (snapshotError: any) {
+                console.error(`[BACKGROUND-INDEX] ❌ Error saving snapshot after successful indexing:`, snapshotError);
+
+                // Mark as failed but with note that indexing succeeded
+                const errorMessage = `Indexing completed but snapshot save failed: ${snapshotError.message || String(snapshotError)}`;
+                this.snapshotManager.setCodebaseIndexFailed(absolutePath, errorMessage, 100);
+
+                // Try to save the failed status at least
+                try {
+                    this.snapshotManager.saveCodebaseSnapshot();
+                } catch (e) {
+                    console.error(`[BACKGROUND-INDEX] ❌ Could not save failed status:`, e);
+                }
+
+                throw snapshotError;
             }
-
-            console.log(`[BACKGROUND-INDEX] ${message}`);
 
         } catch (error: any) {
             console.error(`[BACKGROUND-INDEX] Error during indexing for ${absolutePath}:`, error);

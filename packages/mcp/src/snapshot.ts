@@ -491,16 +491,60 @@ export class SnapshotManager {
                 lastUpdated: new Date().toISOString()
             };
 
-            fs.writeFileSync(this.snapshotFilePath, JSON.stringify(snapshot, null, 2));
+            const snapshotContent = JSON.stringify(snapshot, null, 2);
+            console.log(`[SNAPSHOT-DEBUG] 📝 Writing snapshot with ${Object.keys(snapshot.codebases).length} codebases...`);
+
+            // Log each codebase being saved for debugging
+            Object.keys(snapshot.codebases).forEach(path => {
+                const info = snapshot.codebases[path];
+                const files = (info as any).indexedFiles || 0;
+                const chunks = (info as any).totalChunks || 0;
+                console.log(`[SNAPSHOT-DEBUG]   - ${path}: status=${info.status}, files=${files}, chunks=${chunks}`);
+            });
+
+            // Write with explicit options
+            fs.writeFileSync(this.snapshotFilePath, snapshotContent, { encoding: 'utf8', mode: 0o644 });
+
+            // CRITICAL FIX: Verify write was successful
+            console.log(`[SNAPSHOT-DEBUG] 🔍 Verifying file write...`);
+            const verifyContent = fs.readFileSync(this.snapshotFilePath, 'utf8');
+            const verifySnapshot = JSON.parse(verifyContent);
+
+            if (!verifySnapshot.codebases) {
+                throw new Error(`Snapshot verification failed! Missing 'codebases' object`);
+            }
+
+            const expectedCount = Object.keys(snapshot.codebases).length;
+            const actualCount = Object.keys(verifySnapshot.codebases).length;
+
+            if (actualCount !== expectedCount) {
+                throw new Error(`Snapshot verification failed! Expected ${expectedCount} codebases, found ${actualCount}`);
+            }
 
             const indexedCount = this.indexedCodebases.length;
             const indexingCount = this.indexingCodebases.size;
             const failedCount = this.getFailedCodebases().length;
 
-            console.log(`[SNAPSHOT-DEBUG] Snapshot saved successfully in v2 format. Indexed: ${indexedCount}, Indexing: ${indexingCount}, Failed: ${failedCount}`);
+            console.log(`[SNAPSHOT-DEBUG] ✅ Snapshot saved and verified successfully`);
+            console.log(`[SNAPSHOT-DEBUG] 📍 File: ${this.snapshotFilePath}`);
+            console.log(`[SNAPSHOT-DEBUG] 📊 Statistics: Indexed: ${indexedCount}, Indexing: ${indexingCount}, Failed: ${failedCount}`);
+            console.log(`[SNAPSHOT-DEBUG] 📏 File size: ${Buffer.byteLength(snapshotContent, 'utf8')} bytes`);
 
         } catch (error: any) {
-            console.error('[SNAPSHOT-DEBUG] Error saving snapshot:', error);
+            console.error('[SNAPSHOT-DEBUG] ❌ Error saving snapshot:', error);
+            console.error('[SNAPSHOT-DEBUG] 📍 Attempted path:', this.snapshotFilePath);
+            console.error('[SNAPSHOT-DEBUG] 📊 Current map size:', this.codebaseInfoMap.size);
+
+            // Log map contents for debugging
+            if (this.codebaseInfoMap.size > 0) {
+                console.error('[SNAPSHOT-DEBUG] Map contents:');
+                this.codebaseInfoMap.forEach((value, key) => {
+                    console.error(`  - ${key}: ${JSON.stringify(value)}`);
+                });
+            }
+
+            // Re-throw to ensure caller knows about the failure
+            throw error;
         }
     }
 } 
