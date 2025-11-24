@@ -25,7 +25,7 @@ import { Context } from "@zilliz/claude-context-core";
 import { MilvusVectorDatabase } from "@zilliz/claude-context-core";
 
 // Import our modular components
-import { createMcpConfig, logConfigurationSummary, showHelpMessage, ContextMcpConfig } from "./config.js";
+import { createMcpConfig, logConfigurationSummary, showHelpMessage, verifyMilvusConnection, verifyEmbeddingProvider, ContextMcpConfig } from "./config.js";
 import { createEmbeddingInstance, logEmbeddingProviderInfo } from "./embedding.js";
 import { SnapshotManager } from "./snapshot.js";
 import { SyncManager } from "./sync.js";
@@ -277,6 +277,22 @@ async function main() {
     // Create configuration
     const config = createMcpConfig();
     logConfigurationSummary(config);
+
+    // Perform startup health checks
+    console.log(`[MCP] 🏥 Running startup health checks...`);
+    try {
+        // Verify embedding provider configuration
+        verifyEmbeddingProvider(config);
+
+        // Verify Milvus connection
+        await verifyMilvusConnection(config.milvusAddress);
+
+        console.log(`[MCP] ✅ All health checks passed!`);
+    } catch (error: any) {
+        console.error(`[MCP] ❌ Health check failed: ${error.message}`);
+        console.error(`[MCP] Please fix the configuration and try again.`);
+        process.exit(1);
+    }
 
     const server = new ContextMcpServer(config);
     await server.start();

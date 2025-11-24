@@ -222,4 +222,83 @@ Examples:
   # Start MCP server with Ollama and specific model (using EMBEDDING_MODEL)
   EMBEDDING_PROVIDER=Ollama EMBEDDING_MODEL=nomic-embed-text MILVUS_TOKEN=your-token npx @zilliz/claude-context-mcp@latest
         `);
+}
+
+/**
+ * Verify Milvus connection at startup
+ * Throws an error if connection fails
+ *
+ * Note: This is a basic check. Full connection verification happens when
+ * MilvusVectorDatabase is initialized in ContextMcpServer constructor.
+ */
+export async function verifyMilvusConnection(milvusAddress?: string): Promise<void> {
+    if (!milvusAddress) {
+        throw new Error(
+            'Milvus address is not configured. ' +
+            'Please set MILVUS_ADDRESS in ~/.context/.env file (e.g., MILVUS_ADDRESS=localhost:19530)'
+        );
+    }
+
+    console.log(`[HEALTH] 🔌 Milvus address configured: ${milvusAddress}`);
+
+    // Basic format validation
+    if (!milvusAddress.includes(':')) {
+        console.warn(`[HEALTH] ⚠️  Milvus address format warning: Expected 'host:port' format`);
+    }
+
+    console.log(`[HEALTH] ℹ️  Full Milvus connection will be verified during server initialization`);
+    console.log(`[HEALTH] ✅ Milvus configuration check passed`);
+}
+
+/**
+ * Verify embedding provider configuration at startup
+ * Checks that required API keys are present
+ */
+export function verifyEmbeddingProvider(config: ContextMcpConfig): void {
+    console.log(`[HEALTH] 🔍 Verifying ${config.embeddingProvider} configuration...`);
+
+    switch (config.embeddingProvider) {
+        case 'OpenAI':
+            if (!config.openaiApiKey) {
+                throw new Error(
+                    'OpenAI API key is required but not configured. ' +
+                    'Please set OPENAI_API_KEY in ~/.context/.env file.'
+                );
+            }
+            // Basic format validation
+            if (!config.openaiApiKey.startsWith('sk-')) {
+                console.warn(`[HEALTH] ⚠️  OpenAI API key should start with 'sk-'. Current key may be invalid.`);
+            }
+            console.log(`[HEALTH] ✅ OpenAI API key configured (length: ${config.openaiApiKey.length})`);
+            break;
+
+        case 'VoyageAI':
+            if (!config.voyageaiApiKey) {
+                throw new Error(
+                    'VoyageAI API key is required but not configured. ' +
+                    'Please set VOYAGEAI_API_KEY in ~/.context/.env file.'
+                );
+            }
+            console.log(`[HEALTH] ✅ VoyageAI API key configured`);
+            break;
+
+        case 'Gemini':
+            if (!config.geminiApiKey) {
+                throw new Error(
+                    'Gemini API key is required but not configured. ' +
+                    'Please set GEMINI_API_KEY in ~/.context/.env file.'
+                );
+            }
+            console.log(`[HEALTH] ✅ Gemini API key configured`);
+            break;
+
+        case 'Ollama':
+            const ollamaHost = config.ollamaHost || 'http://127.0.0.1:11434';
+            console.log(`[HEALTH] ✅ Ollama configured (host: ${ollamaHost}, model: ${config.embeddingModel})`);
+            console.log(`[HEALTH] ℹ️  Note: Ollama connection will be verified on first use`);
+            break;
+
+        default:
+            throw new Error(`Unknown embedding provider: ${config.embeddingProvider}`);
+    }
 } 
