@@ -1,7 +1,7 @@
 {
-    "name": "claude-context",
+    "name": "claude-context-enhanced",
     "version": "0.1.3",
-    "description": "A powerful code indexing tool with multi-platform support",
+    "description": "An enhanced fork of claude-context with stability fixes, improved synchronization, and better reliability",
     "private": true,
     "scripts": {
         "build": "pnpm -r --filter='!./examples/*' build && pnpm -r --filter='./examples/*' build",
@@ -44,8 +44,11 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/zilliztech/claude-context.git"
+        "url": "https://github.com/gitabozaid/claude-context-enhanced.git"
     },
     "license": "MIT",
-    "author": "Cheney Zhang <277584121@qq.com>"
+    "author": "Cheney Zhang <277584121@qq.com>",
+    "contributors": [
+        "Mohamed Abozaid <gitabozaid@github.com>"
+    ]
 }
